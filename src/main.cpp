@@ -15,6 +15,9 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 DHT dht(DHTPIN, DHTTYPE);
 
+hw_timer_t *timer = NULL;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
 void function_interrupt();
 
 int counter = 0;
@@ -56,6 +59,18 @@ const unsigned char platformIOlogo [] PROGMEM = {
 	0xff, 0xff, 0xf8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0xff, 0xff
 };
 
+volatile unsigned long int timerCounter = 0;
+bool is2Sec = false;
+bool is1Sec = false;
+void onTimer()
+{
+  portENTER_CRITICAL_ISR(&timerMux);
+  timerCounter++;
+  if(timerCounter%10 == 0) is1Sec = true;
+  if(timerCounter%20 == 0) is2Sec = true;
+  portEXIT_CRITICAL_ISR(&timerMux);
+}
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(14, INPUT);
@@ -69,6 +84,12 @@ void setup() {
     for(;;); // Don't proceed, loop forever
   }
 
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &onTimer, true);
+  timerAlarmWrite(timer, 100000, true);
+  timerAlarmEnable(timer);
+
+
   display.display();
   delay(2000);
   display.clearDisplay();
@@ -78,13 +99,22 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-
-  Serial.printf("Temperature = %.2f\n", dht.readTemperature());
-  Serial.printf("Counter = %d\n", counter);
+  if(is2Sec)
+  {
+    Serial.printf("Temperature = %.2f\n", dht.readTemperature());
+    Serial.printf("Counter = %d\n", counter);
+    is2Sec = false;
+  }
+  if(is1Sec)
+  {
+    Serial.println("Print Every 1 s.");
+    is1Sec = false;
+  }
+  
   // Serial.print("Counter = ");
   // Serial.print(counter);
   // Serial.println();
-  delay(2000);
+  // delay(2000);
 }
 
 void IRAM_ATTR function_interrupt(){
